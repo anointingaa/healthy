@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Healthy With Happiness – Pregnancy Due Date & Health Check</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <meta name="description" content="Pregnancy due date calculator, Nigerian-focused pregnancy health self-check, and personalized guidance. Educational only—not medical advice." />
+  <style>
+    .card { background:#fff; border-radius:16px; box-shadow:0 6px 18px rgba(15,23,42,0.08); padding:20px; }
+    @media (min-width:768px){ .card { padding:32px; } }
+    .btn { display:inline-flex; align-items:center; justify-content:center; border-radius:12px; padding:12px 20px; font-weight:600; transition:background .15s ease,color .15s ease,border-color .15s ease; }
+    .btn-primary { background:#059669; color:#fff; }
+    .btn-primary:hover { background:#047857; }
+    .btn-secondary { background:#334155; color:#fff; }
+    .btn-secondary:hover { background:#1f2937; }
+    .btn-outline { border:1px solid #cbd5e1; background:#fff; }
+    .btn-outline:hover { background:#f8fafc; }
+    .badge { display:inline-flex; align-items:center; border-radius:9999px; padding:4px 10px; font-size:0.875rem; font-weight:600; }
+    .badge-emerald { background:#d1fae5; color:#047857; }
+    .badge-muted { background:#e5e7eb; color:#374151; }
+    .badge-danger { background:#dc2626; color:#fff; }
+    .badge-warn { background:#f59e0b; color:#fff; }
+    textarea.email-preview { width:100%; min-height:260px; border:1px solid #cbd5e1; border-radius:12px; padding:12px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+  <header class="max-w-5xl mx-auto px-4 py-6">
+    <div class="flex items-center justify-between">
+      <h1 class="text-xl md:text-2xl font-bold">Healthy With Happiness – Pregnancy Guide</h1>
+      <span class="hidden md:inline text-xs text-slate-500">Educational only • Not a medical device</span>
+    </div>
+  </header>
+
+  <main class="max-w-5xl mx-auto px-4 pb-24">
+    <section class="mb-6">
+      <div class="card">
+        <div class="flex flex-col md:flex-row md:items-center gap-6">
+          <div class="flex-1">
+            <h2 class="text-2xl md:text-3xl font-bold">Pregnancy health & due date tool for Nigerian and African mothers</h2>
+            <p class="mt-2 text-slate-600">Estimate your due date, answer key pregnancy health questions tailored for our environment, and get a clear plan. Your email report will include detailed explanations for each missing check or risk, why it matters, and culturally relevant next steps to take with your healthcare provider in Nigeria or Africa.</p>
+          </div>
+          <div>
+            <div class="badge badge-emerald">v2</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Stepper -->
+    <section class="mb-6">
+      <div class="card">
+        <div class="flex items-center gap-2 text-sm">
+          <div id="step1-ind" class="badge badge-emerald" style="background:#059669;color:#fff;">1</div>
+          <span class="mr-3 font-medium">Due date</span>
+          <div class="h-px flex-1 bg-slate-200"></div>
+          <div id="step2-ind" class="badge badge-muted">2</div>
+          <span class="mr-3 font-medium">Health check</span>
+          <div class="h-px flex-1 bg-slate-200"></div>
+          <div id="step3-ind" class="badge badge-muted">3</div>
+          <span class="font-medium">Your plan</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Step 1 -->
+    <section id="step1" class="mb-6">
+      <div class="card">
+        <h3 class="text-lg font-semibold">Estimate your due date</h3>
+        <p class="text-slate-600 mb-4">We use Naegele’s rule and adjust for your cycle length.</p>
+        <div class="grid md:grid-cols-3 gap-4">
+          <div>
+            <label class="block text-sm font-medium mb-1">Last menstrual period (LMP)</label>
+            <input id="lmp" type="date" class="w-full rounded-lg border border-slate-300 px-3 py-2" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-1">Cycle length (days)</label>
+            <input id="cycle" type="number" placeholder="28" min="20" max="45" class="w-full rounded-lg border border-slate-300 px-3 py-2"/>
+          </div>
+          <div class="flex items-end">
+            <button id="calcBtn" class="btn btn-primary w-full">Calculate</button>
+          </div>
+        </div>
+        <div id="dueOut" class="mt-4 text-slate-700"></div>
+      </div>
+    </section>
+
+    <!-- Step 2 -->
+    <section id="step2" class="mb-6 hidden">
+      <div class="card">
+        <h3 class="text-lg font-semibold">Quick health check</h3>
+        <p class="text-slate-600 mb-4">Answer honestly. If any urgent symptoms are present, call your provider or emergency services.</p>
+        <div class="mt-2">
+          <h4 class="font-semibold mb-2">Urgent warning signs (Yes/No)</h4>
+          <div class="grid md:grid-cols-2 gap-3">
+            <div id="urgentList" class="space-y-2"></div>
+          </div>
+        </div>
+        <div class="mt-6">
+          <h4 class="font-semibold mb-2">Routine checks & habits</h4>
+          <div id="routineList" class="grid md:grid-cols-2 gap-3"></div>
+        </div>
+        <div class="mt-6">
+          <h4 class="font-semibold mb-2">Mood check (PHQ‑2)</h4>
+          <p class="text-slate-600 text-sm mb-2">In the last 2 weeks, how often have you been bothered by:</p>
+          <div class="space-y-3">
+            <div>
+              <label class="block mb-1">Little interest or pleasure in doing things</label>
+              <select id="phq1" class="rounded-lg border border-slate-300 px-3 py-2">
+                <option value="0">Not at all (0)</option>
+                <option value="1">Several days (1)</option>
+                <option value="2">More than half the days (2)</option>
+                <option value="3">Nearly every day (3)</option>
+              </select>
+            </div>
+            <div>
+              <label class="block mb-1">Feeling down, depressed, or hopeless</label>
+              <select id="phq2" class="rounded-lg border border-slate-300 px-3 py-2">
+                <option value="0">Not at all (0)</option>
+                <option value="1">Several days (1)</option>
+                <option value="2">More than half the days (2)</option>
+                <option value="3">Nearly every day (3)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-6 flex gap-3">
+          <button id="back1" class="btn btn-outline">Back</button>
+          <button id="toResults" class="btn btn-secondary">See my plan</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Step 3 -->
+    <section id="step3" class="mb-6 hidden">
+      <div class="card">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-lg font-semibold">Your personalized plan</h3>
+          <span id="riskBadge" class="badge badge-muted"></span>
+        </div>
+        <div id="planOut" class="prose max-w-none"></div>
+
+        <div class="mt-6 grid md:grid-cols-2 gap-4">
+          <div class="card">
+            <h4 class="font-semibold">Email this plan to yourself</h4>
+            <p class="text-sm text-slate-600 mb-2">Enter your email to receive your action plan and weekly tips. You can unsubscribe anytime.</p>
+            <div class="flex gap-2">
+              <input id="emailInput" type="email" placeholder="you@example.com" class="flex-1 rounded-lg border border-slate-300 px-3 py-2"/>
+              <button id="subscribeBtn" class="btn btn-primary">Send</button>
+            </div>
+            <p id="emailMsg" class="text-sm mt-2"></p>
+            <p class="text-xs text-slate-500 mt-2">Live site sends via ConvertKit; preview shows the full email below.</p>
+          </div>
+          <div class="card">
+            <h4 class="font-semibold">Email content (preview)</h4>
+            <textarea id="emailPreview" class="email-preview" readonly>Complete the steps to preview the email here.</textarea>
+          </div>
+        </div>
+
+        <div class="mt-6">
+          <button id="restart" class="btn btn-outline">Start over</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="max-w-5xl mx-auto px-4 py-10 text-center text-xs text-slate-500">
+    © Healthy With Happiness • Sources include CDC maternal warning signs, ACOG guidance, and PHQ‑2. Educational, not medical advice.
+  </footer>
+
+  <script src="./assets/js/app.js" defer></script>
+</body>
+</html>
