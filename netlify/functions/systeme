@@ -1,0 +1,54 @@
+// netlify/functions/subscribe.js
+exports.handler = async (event) => {
+  try {
+    const { email, meta = {}, first_name } = JSON.parse(event.body || '{}');
+    if (!email) return { statusCode: 400, body: JSON.stringify({ error: 'Email required' }) };
+
+    const API_KEY = process.env.SYSTEME_API_KEY;  // from Netlify env vars
+    const TAG_ID = process.env.SYSTEME_TAG_ID;    // numeric ID of your Systeme tag
+    if (!API_KEY || !TAG_ID) {
+      return { statusCode: 500, body: JSON.stringify({ error: 'Missing SYSTEME_API_KEY or SYSTEME_TAG_ID' }) };
+    }
+
+    const headers = { 'Content-Type': 'application/json', 'X-API-Key': API_KEY };
+
+    // 1. Create or update contact with custom fields
+    const createResp = await fetch('https://api.systeme.io/api/contacts', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        email,
+        firstName: first_name || undefined,
+        fields: [
+          { slug: 'long_email',        value: meta.long_email || '' },
+          { slug: 'due_date',          value: meta.due_date || '' },
+          { slug: 'gestational_weeks', value: meta.gestational_weeks || '' },
+          { slug: 'risk_level',        value: meta.risk_level || '' },
+          { slug: 'missing_checks',    value: meta.missing_checks || '' },
+          { slug: 'subject_line',      value: meta.subject_line || '' },
+        ]
+      })
+    });
+    if (!createResp.ok) {
+      const detail = await createResp.text();
+      return { statusCode: createResp.status, body: JSON.stringify({ error: 'Create contact failed', detail }) };
+    }
+    const contact = await createResp.json();
+    const contactId = contact?.id;
+    if (!contactId) return { statusCode: 500, body: JSON.stringify({ error: 'No contact ID returned' }) };
+
+    // 2. Tag contact to trigger automation rule
+    const tagResp = await fetch(`https://api.systeme.io/api/contacts/${contactId}/tags`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ tagId: TAG_ID })
+    });
+    if (!tagResp.ok) {
+      const detail = await tagResp.text();
+      return { statusCode: tagResp.status, body: JSON.stringify({ error: 'Tag assign failed', detail }) };
+    }
+    return { statusCode: 200, body: JSON.stringify({ message: 'Success', contactId }) };
+  } catch (e) {
+    return { statusCode: 500, body: JSON.stringify({ error: 'Server error', detail: String(e) }) };
+  }
+};
