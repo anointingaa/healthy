@@ -124,16 +124,61 @@ function buildEmailLong(dueInfo){
   return lines.join("\n")
 }
 
-function buildEmailLong(dueInfo){
-   ...your code...
-   return lines.join("\n")
-}
-
 function buildPlan(dueInfo){
-   ...the fixed code I gave you...
-}
+  let urgent=false;
+  urgentQs.forEach((q,i)=>{
+    const yes=document.querySelector(`input[name="u${i}"]:checked`)?.value==='yes';
+    if(yes) urgent=true;
+  });
 
-async function subscribe(email,meta){ ...
+  const gaps=[];
+  routineQs.forEach((q,i)=>{
+    const checked=document.getElementById(`r${i}`).checked;
+    if(!checked) gaps.push(q);
+  });
+
+  const phq = Number(document.getElementById('phq1')?.value||0) + Number(document.getElementById('phq2')?.value||0);
+  const phqFlag = phq >= 3;
+
+  let risk='On track';
+  if(urgent) risk='URGENT';
+  else if(phqFlag || gaps.length>=2) risk='Needs attention';
+
+  const badge=document.getElementById('riskBadge');
+  if(badge){
+    badge.className='badge '+(risk==='URGENT'?'badge-danger':risk==='Needs attention'?'badge-warn':'badge-emerald');
+    badge.textContent=risk;
+  }
+
+  const weeks=gestationWeeks(dueInfo.lmp);
+  const out=[];
+  out.push(`<p><strong>Due date:</strong> ${formatDate(dueInfo.due)} (about ${weeks} weeks along)</p>`);
+  out.push("<h4 class='mt-4 font-semibold'>Your action plan</h4>");
+
+  const actions=[];
+  if(urgent){ actions.push("Call your maternity unit, obstetric provider, or emergency services now. Do not wait."); }
+  if(phqFlag){ actions.push("Your mood check suggests you may benefit from mental-health support. If you have thoughts of self-harm, seek urgent care immediately."); }
+  if(gaps.includes("I’ve had a prenatal visit (or have one scheduled)")){ actions.push("Book a prenatal appointment as soon as possible—early care improves outcomes."); }
+  if(gaps.includes("I have done malaria test and received treatment if positive")){ actions.push("Do a malaria test and get treatment if positive to avoid anemia, miscarriage, and low birth weight."); }
+  if(gaps.includes("I have done HIV test and know my status")){ actions.push("Do an HIV test; treatment protects you and your baby."); }
+  if(gaps.includes("I have done hepatitis B test")){ actions.push("Screen for hepatitis B; early detection protects your newborn at delivery."); }
+  if(gaps.includes("I have done syphilis test")){ actions.push("Screen for syphilis; early treatment prevents stillbirth and birth defects."); }
+  if(gaps.includes("I have checked my blood group and genotype")){ actions.push("Know your blood group & genotype to manage Rh issues and sickle cell risk."); }
+  if(gaps.includes("I take a daily prenatal vitamin (with folate/folic acid)")){ actions.push("Start a daily prenatal vitamin (folate/folic acid + iron)."); }
+  if(gaps.includes("I stay active with pregnancy-safe exercise")){ actions.push("Aim for ~150 minutes/week of moderate activity if your clinician says it’s safe."); }
+  if(gaps.includes("I have access to enough nutritious food")){ actions.push("Ask your clinic about nutrition support if food access is a challenge."); }
+  if(gaps.includes("I feel safe and supported at home")){ actions.push("If you do not feel safe at home, contact a trusted provider or local support organisation."); }
+
+  if(actions.length===0){
+    out.push("<p>You're on track. Keep up healthy habits and regular prenatal care.</p>");
+  }else{
+    out.push("<ul class='list-disc pl-5'>"+actions.map(a=>`<li>${a}</li>`).join("")+"</ul>");
+  }
+  out.push("<p class='text-xs text-slate-500 mt-3'>This is educational information and not a diagnosis. Always follow your clinician’s advice.</p>");
+
+  const planEl = document.getElementById('planOut');
+  if(planEl) planEl.innerHTML = out.join("\n");
+}
 
 async function subscribe(email,meta){
   try{
