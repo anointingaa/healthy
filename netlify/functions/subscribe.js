@@ -1,5 +1,5 @@
 // netlify/functions/subscribe.js
-// Creates/updates a Systeme.io contact, sets ONLY non-empty custom fields, then applies a tag to trigger your email rule.
+// Sends ONLY non-empty fields as [{slug, value}] to Systeme, then applies tag.
 
 exports.handler = async (event) => {
   const fail = (code, msg, detail) => {
@@ -8,7 +8,6 @@ exports.handler = async (event) => {
   };
 
   try {
-    // Quick probe when opened in browser
     if (event.httpMethod !== 'POST') {
       return fail(400, 'Email required');
     }
@@ -25,16 +24,12 @@ exports.handler = async (event) => {
     const API_KEY = (process.env.SYSTEME_API_KEY || '').trim();
     const TAG_ID_STR = (process.env.SYSTEME_TAG_ID || '').trim();
     if (!API_KEY || !TAG_ID_STR) {
-      return fail(500, 'Missing SYSTEME_API_KEY or SYSTEME_TAG_ID', {
-        hasKey: !!API_KEY, tagIdRaw: TAG_ID_STR
-      });
+      return fail(500, 'Missing SYSTEME_API_KEY or SYSTEME_TAG_ID', { hasKey: !!API_KEY, tagIdRaw: TAG_ID_STR });
     }
     const TAG_ID = Number(TAG_ID_STR);
-    if (!Number.isFinite(TAG_ID)) {
-      return fail(400, 'SYSTEME_TAG_ID must be numeric', TAG_ID_STR);
-    }
+    if (!Number.isFinite(TAG_ID)) return fail(400, 'SYSTEME_TAG_ID must be numeric', TAG_ID_STR);
 
-    // Headers (include both common key headers just in case)
+    // Headers (use both common header casings)
     const headers = {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
@@ -42,50 +37,37 @@ exports.handler = async (event) => {
       'Api-Key': API_KEY
     };
 
-    // ---- Option A: include ONLY non-empty fields ----
+    // Build fields ARRAY (slug/value) and filter blanks
     const rawFields = {
       long_email:        meta.long_email,
       due_date:          meta.due_date,
       gestational_weeks: meta.gestational_weeks,
       risk_level:        meta.risk_level,
       missing_checks:    meta.missing_checks
-      // NOTE: subject_line intentionally omitted to avoid blank-value errors
+      // subject_line intentionally omitted
     };
-    const fieldEntries = Object.entries(rawFields)
-      .filter(([_, v]) => (v ?? '').toString().trim().length > 0);
+    const fieldsArray = Object.entries(rawFields)
+      .filter(([_, v]) => (v ?? '').toString().trim().length > 0)
+      .map(([slug, value]) => ({ slug, value }));
 
-    // Prefer object format first; if 422, we’ll try array format as fallback
-    const fieldsObject = Object.fromEntries(fieldEntries);
-    const fieldsArray = fieldEntries.map(([slug, value]) => ({ slug, value }));
-
-    const contactBase = {
+    const contactBody = {
       email,
-      firstName: first_name || undefined
+      firstName: first_name || undefined,
+      // IMPORTANT: array format so slugs are accepted
+      fields: fieldsArray
     };
 
-    // 1) Create contact (object format first)
-    let createResp = await fetch('https://api.systeme.io/api/contacts', {
+    // Create/Update contact
+    const createResp = await fetch('https://api.systeme.io/api/contacts', {
       method: 'POST',
       headers,
-      body: JSON.stringify({ ...contactBase, fields: fieldsObject })
+      body: JSON.stringify(contactBody)
     });
-    let createText = await createResp.text();
-
-    // If Unprocessable (422), try array-of-slug/value format
-    if (createResp.status === 422) {
-      createResp = await fetch('https://api.systeme.io/api/contacts', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ ...contactBase, fields: fieldsArray })
-      });
-      createText = await createResp.text();
-    }
-
+    const createText = await createResp.text();
     if (!createResp.ok) {
       return fail(createResp.status, 'Create contact failed', createText);
     }
 
-    // Parse contact ID
     let contactId = null;
     try {
       const j = JSON.parse(createText);
@@ -95,7 +77,7 @@ exports.handler = async (event) => {
     }
     if (!contactId) return fail(500, 'No contact ID returned', createText);
 
-    // 2) Add tag to trigger Systeme automation
+    // Tag to trigger automation
     const tagResp = await fetch(`https://api.systeme.io/api/contacts/${contactId}/tags`, {
       method: 'POST',
       headers,
