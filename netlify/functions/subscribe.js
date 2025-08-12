@@ -1,5 +1,5 @@
 // netlify/functions/subscribe.js
-// Upsert contact in Systeme.io, trimming fields to 255, then apply tag to trigger email.
+// Upsert a Systeme.io contact, accept chunked long fields (long_1..long_8), trim to 255, then apply tag.
 
 exports.handler = async (event) => {
   const fail = (code, msg, detail) => {
@@ -14,10 +14,10 @@ exports.handler = async (event) => {
 
   try {
     if (event.httpMethod !== 'POST') {
-      return fail(400, 'Email required');
+      return fail(400, 'Email required'); // simple probe
     }
 
-    // Parse body
+    // Parse request
     let payload = {};
     try { payload = JSON.parse(event.body || '{}'); }
     catch (e) { return fail(400, 'Bad JSON body', String(e)); }
@@ -25,7 +25,7 @@ exports.handler = async (event) => {
     const { email, meta = {}, first_name } = payload;
     if (!email) return fail(400, 'Email required');
 
-    // Env
+    // Env vars
     const API_KEY = (process.env.SYSTEME_API_KEY || '').trim();
     const TAG_ID_STR = (process.env.SYSTEME_TAG_ID || '').trim();
     if (!API_KEY || !TAG_ID_STR) {
@@ -39,20 +39,27 @@ exports.handler = async (event) => {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
       'X-API-Key': API_KEY,
-      'Api-Key': API_KEY // some accounts honor this casing
+      'Api-Key': API_KEY // some accounts accept this casing
     };
 
-    // Build fields ARRAY (slug/value) — ONLY non-empty, each trimmed to 255
+    // Build fields from meta:
+    // - core short fields (preview + facts)
+    // - dynamic long_n chunks (long_1..long_8)
     const rawFields = {
-      long_email:        meta.long_email,
-      due_date:          meta.due_date,
-      gestational_weeks: meta.gestational_weeks,
-      risk_level:        meta.risk_level,
-      missing_checks:    meta.missing_checks
+      long_email_preview: meta.long_email_preview,
+      due_date:           meta.due_date,
+      gestational_weeks:  meta.gestational_weeks,
+      risk_level:         meta.risk_level,
+      missing_checks:     meta.missing_checks
     };
+    Object.keys(meta).forEach((k) => {
+      if (/^long_\d+$/.test(k)) rawFields[k] = meta[k];
+    });
+
+    // Trim and filter blanks; send as ARRAY [{slug,value}] (slug format is required)
     const fieldsArray = Object.entries(rawFields)
       .map(([slug, value]) => ({ slug, value: trim255(value) }))
-      .filter(({ value }) => value.trim().length > 0);
+      .filter(({ value }) => value && value.toString().trim().length > 0);
 
     const contactBody = {
       email,
@@ -60,106 +67,79 @@ exports.handler = async (event) => {
       fields: fieldsArray
     };
 
-    // ---- Helper: search contact by email (try 2 endpoints) ----
+    // Helpers
     const findContactByEmail = async (emailToFind) => {
-      // Try v1 style search
+      // Try GET /api/contacts?email=
       let r = await fetch(`https://api.systeme.io/api/contacts?email=${encodeURIComponent(emailToFind)}`, {
-        method: 'GET',
-        headers
+        method: 'GET', headers
       });
       let t = await r.text();
       if (r.ok) {
         try {
           const j = JSON.parse(t);
-          // Accept either {items:[{id:...}]} or {data:[{id:...}]} or direct {id:...}
-          const found = j?.items?.[0]?.id || j?.data?.[0]?.id || j?.id || null;
-          if (found) return found;
+          return j?.items?.[0]?.id || j?.data?.[0]?.id || j?.id || null;
         } catch {}
       }
-      // Try explicit search endpoint (if available on your account)
+      // Fallback search endpoint (some accounts)
       r = await fetch('https://api.systeme.io/api/contacts/search', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ email: emailToFind })
+        method: 'POST', headers, body: JSON.stringify({ email: emailToFind })
       });
       t = await r.text();
       if (r.ok) {
         try {
           const j = JSON.parse(t);
-          const found = j?.items?.[0]?.id || j?.data?.[0]?.id || j?.id || null;
-          if (found) return found;
+          return j?.items?.[0]?.id || j?.data?.[0]?.id || j?.id || null;
         } catch {}
       }
       return null;
     };
 
-    // ---- Helper: update fields on existing contact (PATCH if available, else POST to /contacts/{id}) ----
     const updateContactFields = async (contactId, fieldsArr) => {
-      // Try PATCH
+      // PATCH first
       let r = await fetch(`https://api.systeme.io/api/contacts/${contactId}`, {
-        method: 'PATCH',
-        headers,
-        body: JSON.stringify({ fields: fieldsArr })
+        method: 'PATCH', headers, body: JSON.stringify({ fields: fieldsArr })
       });
-      let t = await r.text();
       if (r.ok) return true;
-
-      // Fallback: sometimes POST update works on some accounts
+      // Fallback POST (some accounts allow)
       r = await fetch(`https://api.systeme.io/api/contacts/${contactId}`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ fields: fieldsArr })
+        method: 'POST', headers, body: JSON.stringify({ fields: fieldsArr })
       });
-      t = await r.text();
       return r.ok;
     };
 
-    // ---- Helper: tag a contact ----
     const tagContact = async (contactId) => {
       const tr = await fetch(`https://api.systeme.io/api/contacts/${contactId}/tags`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ tagId: TAG_ID })
+        method: 'POST', headers, body: JSON.stringify({ tagId: TAG_ID })
       });
       const tt = await tr.text();
       if (!tr.ok) throw new Error(`Tag assign failed: ${tt}`);
     };
 
-    // 1) Try to CREATE
+    // 1) Try CREATE
     let createResp = await fetch('https://api.systeme.io/api/contacts', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(contactBody)
+      method: 'POST', headers, body: JSON.stringify(contactBody)
     });
     let createText = await createResp.text();
 
     if (!createResp.ok) {
-      // If email already exists, upsert (find → update → tag)
-      if (createResp.status === 400 || createResp.status === 409 || createResp.status === 422) {
-        const lower = createText.toLowerCase();
-        if (lower.includes('already used') || lower.includes('already exists')) {
-          const existingId = await findContactByEmail(email);
-          if (!existingId) {
-            return fail(createResp.status, 'Email exists but contact not found by email search', createText);
-          }
-          // Update fields (safe: all <=255)
-          if (fieldsArray.length > 0) {
-            const ok = await updateContactFields(existingId, fieldsArray);
-            if (!ok) {
-              // Not fatal for sending email; proceed to tag anyway
-              console.warn('[subscribe] Could not update existing fields; proceeding to tag');
-            }
-          }
-          // Tag to fire automation
-          await tagContact(existingId);
-          return { statusCode: 200, body: JSON.stringify({ message: 'Success (existing contact updated/tagged)', contactId: existingId }) };
+      const lower = createText.toLowerCase();
+      const isDup = createResp.status === 400 || createResp.status === 409 || createResp.status === 422;
+      if (isDup && (lower.includes('already used') || lower.includes('already exists'))) {
+        // Upsert path
+        const existingId = await findContactByEmail(email);
+        if (!existingId) return fail(createResp.status, 'Email exists but contact not found by search', createText);
+
+        if (fieldsArray.length > 0) {
+          const ok = await updateContactFields(existingId, fieldsArray);
+          if (!ok) console.warn('[subscribe] Could not update existing fields; proceeding to tag');
         }
+        await tagContact(existingId);
+        return { statusCode: 200, body: JSON.stringify({ message: 'Success (existing contact updated/tagged)', contactId: existingId }) };
       }
-      // Other create errors
       return fail(createResp.status, 'Create contact failed', createText);
     }
 
-    // Parse ID on fresh create
+    // 2) Fresh create → parse ID and tag
     let contactId = null;
     try {
       const j = JSON.parse(createText);
@@ -169,10 +149,9 @@ exports.handler = async (event) => {
     }
     if (!contactId) return fail(500, 'No contact ID returned', createText);
 
-    // 2) Tag newly created contact
     await tagContact(contactId);
-
     return { statusCode: 200, body: JSON.stringify({ message: 'Success (new contact created/tagged)', contactId }) };
+
   } catch (e) {
     return fail(500, 'Server error', String(e));
   }
