@@ -124,6 +124,17 @@ function buildEmailLong(dueInfo){
   return lines.join("\n")
 }
 
+function buildEmailLong(dueInfo){
+   ...your code...
+   return lines.join("\n")
+}
+
+function buildPlan(dueInfo){
+   ...the fixed code I gave you...
+}
+
+async function subscribe(email,meta){ ...
+
 async function subscribe(email,meta){
   try{
     const res=await fetch('/.netlify/functions/subscribe',{
