@@ -69,126 +69,130 @@ function updateStepper(currentStep) {
     }
   });
 }
-document.addEventListener('DOMContentLoaded',()=>{renderQuestions();const step1=document.getElementById('step1');const step2=document.getElementById('step2');const step3=document.getElementById('step3');let dueInfo=null;updateStepper(0);document.getElementById('calcBtn').addEventListener('click',()=>{const lmp=document.getElementById('lmp').value;const cycle=document.getElementById('cycle').value;const dueOut=document.getElementById('dueOut');if(!lmp){dueOut.innerHTML="<span class='text-rose-600'>Please enter your LMP date.</span>";return}dueInfo=calcDueDate(lmp,cycle);const weeks=gestationWeeks(dueInfo.lmp);dueOut.innerHTML=`<div class="bg-slate-50 border border-slate-200 rounded-lg p-3"><p><strong>Estimated due date:</strong> ${formatDate(dueInfo.due)} • <strong>~${weeks} weeks</strong></p></div>`;step1.classList.add('hidden');step2.classList.remove('hidden');updateStepper(1)});document.getElementById('back1').addEventListener('click',()=>{step2.classList.add('hidden');step1.classList.remove('hidden');updateStepper(0)});document.getElementById('toResults').addEventListener('click',()=>{if(!dueInfo){document.getElementById('dueOut').innerHTML="<span class='text-rose-600'>Please calculate your due date first.</span>";step1.classList.remove('hidden');step2.classList.add('hidden');updateStepper(0);return}buildPlan(dueInfo);step2.classList.add('hidden');step3.classList.remove('hidden');updateStepper(2)});document.getElementById('restart').addEventListener('click',()=>{window.location.reload()});document.getElementById('subscribeBtn').addEventListener('click', async () => {
-  const email = document.getElementById('emailInput').value.trim();
-  const msg = document.getElementById('emailMsg');
-  msg.textContent = "";
-  msg.className = "text-sm mt-2";
+document.addEventListener('DOMContentLoaded', () => {
+  renderQuestions();
 
-  // Validate email
-  if (!email || !email.includes('@')) {
-    msg.textContent = "Please enter a valid email address.";
-    msg.classList.add("text-rose-600");
-    return;
+  const step1 = document.getElementById('step1');
+  const step2 = document.getElementById('step2');
+  const step3 = document.getElementById('step3');
+  const dueOut = document.getElementById('dueOut');
+  let dueInfo = null;
+
+  updateStepper(0);
+
+  // STEP 1: Calculate
+  const calcBtn = document.getElementById('calcBtn');
+  if (!calcBtn) {
+    console.error("Missing button with id='calcBtn'.");
+  } else {
+    calcBtn.addEventListener('click', () => {
+      const lmp = document.getElementById('lmp')?.value;
+      const cycle = document.getElementById('cycle')?.value;
+
+      if (!lmp) {
+        if (dueOut) dueOut.innerHTML = "<span class='text-rose-600'>Please enter your LMP date.</span>";
+        return;
+      }
+
+      dueInfo = calcDueDate(lmp, cycle);
+      const weeks = gestationWeeks(dueInfo.lmp);
+      if (dueOut) {
+        dueOut.innerHTML = `
+<div class="bg-slate-50 border border-slate-200 rounded-lg p-3">
+  <p><strong>Estimated due date:</strong> ${formatDate(dueInfo.due)} • <strong>~${weeks} weeks</strong></p>
+</div>`;
+      }
+
+      step1?.classList.add('hidden');
+      step2?.classList.remove('hidden');
+      updateStepper(1);
+    });
   }
 
-  // Ensure dueInfo is available (steps completed)
-  if (!dueInfo) {
-    msg.textContent = "Please complete the steps first.";
-    msg.classList.add("text-rose-600");
-    return;
-  }
+  // Back to step 1
+  document.getElementById('back1')?.addEventListener('click', () => {
+    step2?.classList.add('hidden');
+    step1?.classList.remove('hidden');
+    updateStepper(0);
+  });
 
-  // Build long email report using your existing helper functions
-  const long_email = buildEmailLong(dueInfo);
-  const gestational_weeks = String(gestationWeeks(dueInfo.lmp));
-  const due_date = dueInfo.due.toISOString().slice(0, 10);
-  const risk_level = (document.getElementById('riskBadge')?.textContent || 'Unknown').trim();
-  const missing_checks = routineQs
-    .map((q, i) => ({ q, ok: document.getElementById(`r${i}`).checked }))
-    .filter(x => !x.ok)
-    .map(x => x.q)
-    .join('; ');
-
-  const meta = { long_email, due_date, gestational_weeks, risk_level, missing_checks };
-
-  // Indicate sending status to user
-  msg.textContent = "Sending your full report to your email…";
-  msg.classList.remove("text-rose-600", "text-emerald-600");
-  msg.classList.add("text-slate-600");
-
-  // Send data to your serverless function (Systeme API)
-  try {
-    const res = await subscribe(email, meta);
-    if (res?.message === 'Success') {
-      msg.textContent = "✅ Done! The detailed report is in your inbox.";
-      msg.classList.remove("text-slate-600", "text-rose-600");
-      msg.classList.add("text-emerald-600");
-    } else {
-      msg.textContent = "⚠ Couldn’t send the email right now. Please try again.";
-      msg.classList.remove("text-slate-600", "text-emerald-600");
-      msg.classList.add("text-rose-600");
+  // STEP 2 → STEP 3 (build plan)
+  document.getElementById('toResults')?.addEventListener('click', () => {
+    if (!dueInfo) {
+      if (dueOut) dueOut.innerHTML = "<span class='text-rose-600'>Please calculate your due date first.</span>";
+      step1?.classList.remove('hidden');
+      step2?.classList.add('hidden');
+      updateStepper(0);
+      return;
     }
-  } catch (e) {
-    msg.textContent = "⚠ Network issue. Please try again.";
-    msg.classList.remove("text-slate-600", "text-emerald-600");
-    msg.classList.add("text-rose-600");
-  }
+    buildPlan(dueInfo);
+    step2?.classList.add('hidden');
+    step3?.classList.remove('hidden');
+    updateStepper(2);
+  });
+
+  // Restart
+  document.getElementById('restart')?.addEventListener('click', () => window.location.reload());
+
+  // SUBSCRIBE: send the detailed report by email (Systeme)
+  const subBtn = document.getElementById('subscribeBtn');
+  subBtn?.addEventListener('click', async () => {
+    const email = document.getElementById('emailInput')?.value?.trim();
+    const msg = document.getElementById('emailMsg');
+
+    if (msg) { msg.textContent = ""; msg.className = "text-sm mt-2"; }
+
+    if (!email || !email.includes('@')) {
+      if (msg) { msg.textContent = "Please enter a valid email address."; msg.classList.add("text-rose-600"); }
+      return;
+    }
+    if (!dueInfo) {
+      if (msg) { msg.textContent = "Please complete the steps first."; msg.classList.add("text-rose-600"); }
+      return;
+    }
+
+    // Build meta for email
+    const long_email = buildEmailLong(dueInfo);
+    const gestational_weeks = String(gestationWeeks(dueInfo.lmp));
+    const due_date = dueInfo.due.toISOString().slice(0,10);
+    const risk_level = (document.getElementById('riskBadge')?.textContent || 'Unknown').trim();
+    const missing_checks = routineQs
+      .map((q,i) => ({ q, ok: document.getElementById(`r${i}`).checked }))
+      .filter(x => !x.ok)
+      .map(x => x.q)
+      .join('; ');
+
+    const meta = { long_email, due_date, gestational_weeks, risk_level, missing_checks };
+
+    if (msg) {
+      msg.textContent = "Sending your full report to your email...";
+      msg.classList.remove("text-rose-600", "text-emerald-600");
+      msg.classList.add("text-slate-600");
+    }
+
+    try {
+      const res = await subscribe(email, meta);
+      if (res?.message === 'Success') {
+        if (msg) {
+          msg.textContent = "✅ Done! The detailed report is in your inbox.";
+          msg.classList.remove("text-slate-600", "text-rose-600");
+          msg.classList.add("text-emerald-600");
+        }
+      } else {
+        console.error("Subscription error:", res?.error || res);
+        if (msg) {
+          msg.textContent = "⚠ Couldn’t send the email right now. Please try again.";
+          msg.classList.remove("text-slate-600", "text-emerald-600");
+          msg.classList.add("text-rose-600");
+        }
+      }
+    } catch (e) {
+      console.error("Subscription exception:", e);
+      if (msg) {
+        msg.textContent = "⚠ Network issue. Please try again.";
+        msg.classList.remove("text-slate-600", "text-emerald-600");
+        msg.classList.add("text-rose-600");
+      }
+    }
+  });
 });
-    return; // keep this
-  }
-
-  // 3) Build the LONG email report (more detailed than on-page plan)
-  const long_email = buildEmailLong(dueInfo); // uses all current answers
-
-  // 4) Build the fields we’ll send to the backend (Systeme)
-  const gestational_weeks = String(gestationWeeks(dueInfo.lmp));
-  const due_date = dueInfo.due.toISOString().slice(0,10); // YYYY-MM-DD
-  const risk_level = (document.getElementById('riskBadge')?.textContent || 'Unknown').trim();
-  const missing_checks = routineQs
-    .map((q,i) => ({ q, ok: document.getElementById(`r${i}`).checked }))
-    .filter(x => !x.ok)
-    .map(x => x.q)
-    .join('; ');
-
-  const meta = { long_email, due_date, gestational_weeks, risk_level, missing_checks };
-
-  // 5) Send to your Netlify function -> Systeme (this triggers the email)
-  msg.textContent = "Sending your full report to your email...";
-  msg.classList.remove("text-rose-600", "text-emerald-600");
-  msg.classList.add("text-slate-600");
-
-  try {
-    const res = await subscribe(email, meta); // IMPORTANT: send meta, not {}
-    if (res?.message === 'Success') {
-      msg.textContent = "✅ Done! The detailed report is in your inbox.";
-      msg.classList.remove("text-slate-600", "text-rose-600");
-      msg.classList.add("text-emerald-600");
-    } else {
-      console.error("Subscription error:", res?.error || res);
-      msg.textContent = "⚠ Couldn’t send the email right now. Please try again.";
-      msg.classList.remove("text-slate-600", "text-emerald-600");
-      msg.classList.add("text-rose-600");
-    }
-  } catch (e) {
-    console.error("Subscription exception:", e);
-    msg.textContent = "⚠ Network issue. Please try again.";
-    msg.classList.remove("text-slate-600", "text-emerald-600");
-    msg.classList.add("text-rose-600");
-  }
-});
-;
-    return;
-  }
-  msg.textContent = "Sending...";
-  msg.classList.remove("text-rose-600", "text-emerald-600");
-  msg.classList.add("text-slate-600");
-  try {
-    const res = await subscribe(email, {});
-    if (res?.message === 'Success') {
-      msg.textContent = "Thank you! Your plan is on its way to your inbox.";
-      msg.classList.remove("text-slate-600", "text-rose-600");
-      msg.classList.add("text-emerald-600");
-    } else {
-      console.error("Subscription error:", res?.error || res);
-      msg.textContent = "Sorry, we couldn't subscribe you right now. Please try again later.";
-      msg.classList.remove("text-slate-600", "text-emerald-600");
-      msg.classList.add("text-rose-600");
-    }
-  } catch (e) {
-    console.error("Subscription exception:", e);
-    msg.textContent = "Sorry, something went wrong. Please try again later.";
-    msg.classList.remove("text-slate-600", "text-emerald-600");
-    msg.classList.add("text-rose-600");
-  }
-});})
