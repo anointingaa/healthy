@@ -75,17 +75,56 @@ document.addEventListener('DOMContentLoaded',()=>{renderQuestions();const step1=
   msg.textContent = "";
   msg.className = "text-sm mt-2";
 
-  // 1) Basic validation
+  // Validate email
   if (!email || !email.includes('@')) {
     msg.textContent = "Please enter a valid email address.";
     msg.classList.add("text-rose-600");
-    return; // keep this
+    return;
   }
 
-  // 2) Must have dueInfo (user finished steps 1 & 2)
+  // Ensure dueInfo is available (steps completed)
   if (!dueInfo) {
     msg.textContent = "Please complete the steps first.";
     msg.classList.add("text-rose-600");
+    return;
+  }
+
+  // Build long email report using your existing helper functions
+  const long_email = buildEmailLong(dueInfo);
+  const gestational_weeks = String(gestationWeeks(dueInfo.lmp));
+  const due_date = dueInfo.due.toISOString().slice(0, 10);
+  const risk_level = (document.getElementById('riskBadge')?.textContent || 'Unknown').trim();
+  const missing_checks = routineQs
+    .map((q, i) => ({ q, ok: document.getElementById(`r${i}`).checked }))
+    .filter(x => !x.ok)
+    .map(x => x.q)
+    .join('; ');
+
+  const meta = { long_email, due_date, gestational_weeks, risk_level, missing_checks };
+
+  // Indicate sending status to user
+  msg.textContent = "Sending your full report to your email…";
+  msg.classList.remove("text-rose-600", "text-emerald-600");
+  msg.classList.add("text-slate-600");
+
+  // Send data to your serverless function (Systeme API)
+  try {
+    const res = await subscribe(email, meta);
+    if (res?.message === 'Success') {
+      msg.textContent = "✅ Done! The detailed report is in your inbox.";
+      msg.classList.remove("text-slate-600", "text-rose-600");
+      msg.classList.add("text-emerald-600");
+    } else {
+      msg.textContent = "⚠ Couldn’t send the email right now. Please try again.";
+      msg.classList.remove("text-slate-600", "text-emerald-600");
+      msg.classList.add("text-rose-600");
+    }
+  } catch (e) {
+    msg.textContent = "⚠ Network issue. Please try again.";
+    msg.classList.remove("text-slate-600", "text-emerald-600");
+    msg.classList.add("text-rose-600");
+  }
+});
     return; // keep this
   }
 
