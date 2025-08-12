@@ -135,19 +135,51 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('restart')?.addEventListener('click', () => window.location.reload());
 
   // SUBSCRIBE: send the detailed report by email (Systeme)
-  const subBtn = document.getElementById('subscribeBtn');
-  subBtn?.addEventListener('click', async () => {
-    const email = document.getElementById('emailInput')?.value?.trim();
-    const msg = document.getElementById('emailMsg');
+  const subBtn = const email = document.getElementById('emailInput').value;
+const msg = document.getElementById('emailMsg');
+msg.textContent = "";
+msg.className = "text-sm mt-2";
 
-    if (msg) { msg.textContent = ""; msg.className = "text-sm mt-2"; }
+if (!email || !email.includes('@')) {
+  msg.textContent = "Please enter a valid email address.";
+  msg.classList.add("text-rose-600");
+  return;
+}
 
-    if (!email || !email.includes('@')) {
-      if (msg) { msg.textContent = "Please enter a valid email address."; msg.classList.add("text-rose-600"); }
-      return;
-    }
-    if (!dueInfo) {
-      if (msg) { msg.textContent = "Please complete the steps first."; msg.classList.add("text-rose-600"); }
+// Build the long detailed email text from your dueInfo
+const long_email = emailTemplate({ 
+  dueDate: formatDate(dueInfo.due), 
+  urgent: urgentQs.filter((q, i) => !document.getElementById(`u${i}`).checked),
+  routine: routineQs.filter((q, i) => !document.getElementById(`r${i}`).checked)
+});
+
+// Base metadata (short info)
+const meta = {
+  long_email_preview: long_email.slice(0, 240),
+  due_date: formatDate(dueInfo.due),
+  gestational_weeks: String(gestationWeeks(dueInfo.lmp)),
+  risk_level: (document.getElementById('riskBadge')?.textContent || 'Unknown').trim(),
+  missing_checks: routineQs
+    .map((q, i) => ({ q, ok: document.getElementById(`r${i}`).checked }))
+    .filter(x => !x.ok).map(x => x.q).join('; ')
+};
+
+// Split the long email into 240-character chunks and attach them
+const chunks = long_email.match(/[\s\S]{1,240}/g) || [];
+chunks.slice(0, 8).forEach((t, i) => {
+  meta[`long_${i+1}`] = t;
+});
+
+// Send to backend
+const res = await subscribe(email, meta);
+
+if (res.message) {
+  msg.textContent = res.message;
+  msg.classList.add("text-green-600");
+} else {
+  msg.textContent = "There was a problem sending your report. Please try again.";
+  msg.classList.add("text-rose-600");
+}
       return;
     }
 
